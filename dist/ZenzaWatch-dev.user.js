@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name           ZenzaWatch DEV版 fix playlist kawaida custom
 // @namespace      https://github.com/segabito/
-// @description    ZenzaWatchの開発 先行バージョン
+// @description    ZenzaWatchの開発 先行バージョン kawaida custom 2.2
 // @match          *://www.nicovideo.jp/*
 // @match          *://ext.nicovideo.jp/
 // @match          *://ext.nicovideo.jp/#*
@@ -33,7 +33,6 @@
 // @grant          none
 // @author         segabito
 // @version        2.6.3-fix-playlist.36
-// kawaida.2.1
 // @run-at         document-body
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
 // @updateURL      https://github.com/kawaidainf/ZenzaWatch/raw/kawaidainf-patch-1/dist/ZenzaWatch-dev.user.js
