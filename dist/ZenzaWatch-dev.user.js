@@ -33,9 +33,10 @@
 // @grant          none
 // @author         segabito
 // @version        2.6.3-fix-playlist.36
+// kawaida.2.1
 // @run-at         document-body
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
-// @updateURL      https://github.com/kphrx/ZenzaWatch/raw/playlist-deploy/dist/ZenzaWatch-dev.user.js
+// @updateURL      https://github.com/kawaidainf/ZenzaWatch/raw/kawaidainf-patch-1/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
@@ -24277,6 +24278,24 @@ NicoVideoPlayerDialogView.__css__ = `
 				height: 720px;
 			}
 		}
+		/* 1408x792 kawaida original */
+		@media
+			(min-width: 1820px) and (min-height: 900px)
+		{
+			.zenzaScreenMode_big .zenzaPlayerContainer {
+				width: calc(1408px * 1.05);
+				height: 792px;
+			}
+		}
+		/* 1536x864 kawaida original */
+		@media
+			(min-width: 1920px) and (min-height: 900px)
+		{
+			.zenzaScreenMode_big .zenzaPlayerContainer {
+				width: calc(1536px * 1.05);
+				height: 864px;
+			}
+		}
 		/* 1920x1080 */
 		@media
 			(min-width: 2336px) and (min-height: 1200px)
@@ -28382,9 +28401,10 @@ css.addStyle(`
 	.zenzaWatchVideoInfoPanel:hover .tabSelectContainer {
 		display: flex;
 	}
+	/* kawaida custom 動画情報パネルが左に隠れないよう変更 */
 	.zenzaWatchVideoInfoPanel {
 		top: 20%;
-		right: calc(32px - 320px);
+		right: 10px;
 		left: auto;
 		width: 320px;
 		height: 60%;
