@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name           ZenzaWatch DEV版 fix playlist
+// @name           ZenzaWatch DEV版 fix playlist kawaida custom
 // @namespace      https://github.com/segabito/
 // @description    ZenzaWatchの開発 先行バージョン
 // @match          *://www.nicovideo.jp/*
