@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.6.3-fix-playlist.36
+// @version        2.6.3-fix-playlist.37
 // @run-at         document-body
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
 // @updateURL      https://github.com/kawaidainf/ZenzaWatch/raw/kawaidainf-patch-1/dist/ZenzaWatch-dev.user.js
@@ -101,7 +101,7 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.6.3-fix-playlist.36';
+    var VER = '2.6.3-fix-playlist.37';
     const ENV = 'DEV';
 
 
@@ -7353,7 +7353,18 @@ class CrossDomainGate extends Emitter {
 	_fetch(url, options) {
 		return this._postMessage({command: 'fetch', params: {url, options}});
 	}
-	async fetch(url, options = {}) {
+	async fetch(resource, options = {}) {
+		let url = resource;
+		if (resource instanceof URL) {
+			url = resource.toString();
+		} else if (resource instanceof Request) {
+			url = resource.url;
+			options.method ??= resource.method;
+			options.headers ??= resource.headers;
+			options.body ??= resource.body;
+			options.credentials ??= resource.credentials;
+			options.signal ??= resource.signal;
+		}
 		const result = await this._fetch(url, options);
 		if (typeof result === 'string' || !result.buffer || !result.init || !result.headers) {
 			return result;
