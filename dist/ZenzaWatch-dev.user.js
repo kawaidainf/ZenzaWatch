@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name           ZenzaWatch DEV版 fix playlist kawaida custom
 // @namespace      https://github.com/segabito/
-// @description    ZenzaWatchの開発 先行バージョン kawaida custom 2.2
+// @description    ZenzaWatchの開発 先行バージョン kawaida custom 2.2.1
 // @match          *://www.nicovideo.jp/*
 // @match          *://ext.nicovideo.jp/
 // @match          *://ext.nicovideo.jp/#*
@@ -28435,7 +28435,7 @@ css.addStyle(`
 		box-shadow: 4px 4px 4px #000;
 		border: none;
 		opacity: 0.9;
-		transform: translate3d(-288px, 0, 0);
+		/*transform: translate3d(-288px, 0, 0);*/
 		transition: opacity 0.4s ease, transform 0.4s ease 1s;
 	}
 `, {className: 'screenMode for-full videoInfoPanel'});
