@@ -18,7 +18,7 @@
 // @match          *://*.nicovideo.jp/smile*
 // @match          *://site.nicovideo.jp/*
 // @match          *://anime.nicovideo.jp/*
-// @match          https://www.upload.nicovideo.jp/garage/*
+// @match          https://www.upload.nicovideo.jp/niconico-garage/video/*
 // @match          https://www.google.co.jp/search*
 // @match          https://www.google.com/search*
 // @match          https://*.bing.com/search*
@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.6.3-fix-playlist.37
+// @version        2.6.3-fix-playlist.39
 // @run-at         document-body
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
 // @updateURL      https://github.com/kawaidainf/ZenzaWatch/raw/kawaidainf-patch-1/dist/ZenzaWatch-dev.user.js
@@ -101,7 +101,7 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.6.3-fix-playlist.37';
+    var VER = '2.6.3-fix-playlist.39';
     const ENV = 'DEV';
 
 
@@ -12198,7 +12198,7 @@ class Storyboard extends Emitter {
 				const $selectServer = $select.find(`.select-server-${type === 'dmc' ? 'dmc' : 'domand'}`);
 				$selectServer.addClass('selected');
 				$selectServer.find('.currentVideoQuality')
-					.raf.text(videoSessionInfo.videoFormat.replace(/^.*h264(-|_)/, ''));
+					.raf.text(videoSessionInfo.video.label);
 			};
 			updateDomandVideoQuality(config.props.domandVideoQuality);
 			updateDmcVideoQuality(config.props.dmcVideoQuality);
@@ -13159,21 +13159,17 @@ util.addStyle(`
 	.videoServerTypeSelectMenu .dmcVideoQuality > li.selected > span::before {
 		left: 12px;
 	}
-	/* dmcを使用不能の時はdmc選択とdmc画質選択を薄く */
-	.zenzaPlayerContainer:not(.is-dmcAvailable) .serverType.select-server-dmc,
-	.zenzaPlayerContainer:not(.is-dmcAvailable) .currentVideoQuality {
+	/* domandを使用不能の時はdomand画質選択を薄く */
+	.zenzaPlayerContainer:not(.is-domandAvailable) .serverType.select-server-domand {
 		opacity: 0.4;
 		pointer-events: none;
 		text-shadow: none !important;
 	}
-	.zenzaPlayerContainer:not(.is-dmcAvailable) .currentVideoQuality {
-		display: none;
-	}
-	.zenzaPlayerContainer:not(.is-dmcAvailable) .serverType.select-server-dmc span:before {
-		display: none !important;
-	}
-	.zenzaPlayerContainer:not(.is-dmcAvailable) .serverType {
+	/* dmcを使用不能の時はdmc画質選択を薄く */
+	.zenzaPlayerContainer:not(.is-dmcAvailable) .serverType.select-server-dmc {
+		opacity: 0.4;
 		pointer-events: none;
+		text-shadow: none !important;
 	}
 	/* 選択していないシステムの画質選択を隠す */
 	.videoServerTypeMenu:not(.is-domand-playing) .domandVideoQuality,
@@ -32306,11 +32302,12 @@ const VideoSessionWorker = (() => {
 		const DMC_HEART_BEAT_INTERVAL_MS = 30 * 1000;      // 30sec
 		const SESSION_CLOSE_FAIL_COUNT = 3;
 		const VIDEO_QUALITY = {
-			auto: /.*/,
-			veryhigh: /_(1080p)$/,
-			high: /_(720p)$/,
-			mid: /_(540p|480p)$/,
-			low: /_(360p)$/
+			auto: "auto",
+			veryhigh: "1080p",
+			high: "720p",
+			mid: "480p",
+			low: "360p",
+			verylow: "低画質",
 		};
 		const util = {
 			fetch(url, params = {}) { // ブラウザによっては location.origin は 'blob:' しか入らない
@@ -32351,19 +32348,20 @@ const VideoSessionWorker = (() => {
 			}
 			toString() {
 				let dmcInfo = this._dmcInfo;
-				const availableVideos = dmcInfo.availableVideoIds;
-				const reg = VIDEO_QUALITY[this._videoQuality] || VIDEO_QUALITY.auto;
+				const label = VIDEO_QUALITY[this._videoQuality] || VIDEO_QUALITY.auto;
 				let videos;
-				if (reg === VIDEO_QUALITY.auto) {
-					videos = availableVideos;
+				if (label === VIDEO_QUALITY.auto) {
+					videos = dmcInfo.availableVideoIds;
 				} else {
-					videos = [availableVideos.find(v => reg.test(v)) ?? availableVideos[0]];
+					const { availableVideos } = dmcInfo;
+					const video = availableVideos.find(v => label === v.metadata.label) ?? availableVideos[0];
+					videos = [video.id]
 				}
-				const audios = [dmcInfo.availableAudioIds[0]];
+				const audio = dmcInfo.availableAudioIds[0];
 				let contentSrcIdSets =
-					(this._useHLS && reg === VIDEO_QUALITY.auto)
-					? this._buildAbrContentSrcIdSets(videos, audios)
-					: this._buildContentSrcIdSets(videos, audios);
+					(this._useHLS && label === VIDEO_QUALITY.auto)
+					? this._buildAbrContentSrcIdSets(videos, audio)
+					: this._buildContentSrcIdSets(videos, audio);
 				let http_parameters = {};
 				let parameters = {
 					use_ssl: this._useSSL ? 'yes' : 'no',
@@ -32421,13 +32419,13 @@ const VideoSessionWorker = (() => {
 				};
 				return JSON.stringify(request, null, 2);
 			}
-			_buildContentSrcIdSets(videos, audios) {
+			_buildContentSrcIdSets(videos, audio) {
 				return [
 					{
 						content_src_ids: [
 							{
 								src_id_to_mux: {
-									audio_src_ids: audios,
+									audio_src_ids: [audio],
 									video_src_ids: videos
 								}
 							}
@@ -32435,13 +32433,13 @@ const VideoSessionWorker = (() => {
 					}
 				];
 			}
-			_buildAbrContentSrcIdSets(videos, audios) {
+			_buildAbrContentSrcIdSets(videos, audio) {
 				const v = videos.concat();
 				const contentSrcIds = [];
 				while (v.length > 0) {
 					contentSrcIds.push({
 						src_id_to_mux: {
-							audio_src_ids: [audios[0]],
+							audio_src_ids: [audio],
 							video_src_ids: v.concat()
 						}
 					});
@@ -32526,11 +32524,11 @@ const VideoSessionWorker = (() => {
 			get info() {
 				return {...this._videoSessionInfo, type: this.serverType};
 			}
-			set info({ url, sessionId, videoFormat, audioFormat, heartBeatUrl, deleteSessionUrl, lastResponse }) {
+			set info({ url, sessionId, video, audioFormat, heartBeatUrl, deleteSessionUrl, lastResponse }) {
 				this._videoSessionInfo = {
 					url,
 					sessionId,
-					videoFormat,
+					video,
 					audioFormat,
 					heartBeatUrl,
 					deleteSessionUrl,
@@ -32561,14 +32559,19 @@ const VideoSessionWorker = (() => {
 				if (!this._useHLS) {
 					throw new Error('HLSに未対応');
 				}
-				const audio = this._domandInfo.availableAudioIds[0];
-				const availableVideos = this._domandInfo.availableVideoIds;
-				let video;
+				const { availableVideos } = this._domandInfo;
+				const audioFormat = this._domandInfo.availableAudioIds[0];
+				let videos, videoFormat, videoLabel;
 				if (this._videoQuality === 'auto') {
-					video = availableVideos[0];
+					videos = this._domandInfo.availableVideoIds;
+					const { id, label } = availableVideos[0];
+					videoFormat = id;
+					videoLabel = label;
 				} else {
-					let reg = new RegExp(`-${this._videoQuality}$`);
-					video = availableVideos.find(v => reg.test(v)) ?? availableVideos[0];
+					const video = availableVideos.find(v => v.label === this._videoQuality) ?? availableVideos[0];
+					videoFormat = video.id;
+					videoLabel = video.label;
+					videos = [videoFormat];
 				}
 				const query = new URLSearchParams({ actionTrackId: this._videoInfo.actionTrackId });
 				const url = `https://nvapi.nicovideo.jp/v1/watch/${this._videoInfo.videoId}/access-rights/hls?${query.toString()}`;
@@ -32582,7 +32585,7 @@ const VideoSessionWorker = (() => {
 						'X-Access-Right-Key': this._domandInfo.accessRightKey,
 					},
 					credentials: 'include',
-					body: JSON.stringify({outputs: [[video, audio]]})
+					body: JSON.stringify(this._buildOutputsMatrix(videos, audioFormat))
 				}).then(res => res.json());
 				if (result.meta.status == null || result.meta.status >= 300) {
 					throw new Error('cannot create domand session', result)
@@ -32590,15 +32593,17 @@ const VideoSessionWorker = (() => {
 				this._lastResponse = result.data || {};
 				const {
 					contentUrl,
-					createTime,
 					expireTime
 				} = this._lastResponse;
 				this._lastUpdate = Date.now();
 				this._expireTime = new Date(expireTime);
 				this.info = {
 					url: contentUrl,
-					videoFormat: video,
-					audioFormat: audio,
+					video: {
+						format: videoFormat,
+						label: videoLabel,
+					},
+					audioFormat,
 					lastResponse: result
 				};
 				console.timeEnd('create Domand session');
@@ -32621,6 +32626,11 @@ const VideoSessionWorker = (() => {
 			}
 			get serverType() {
 				return 'domand';
+			}
+			_buildOutputsMatrix(videoIds, audio) {
+				return {
+					outputs: videoIds.map(v => [v, audio]),
+				}
 			}
 		}
 		class DmcSession extends VideoSession {
@@ -32653,12 +32663,12 @@ const VideoSessionWorker = (() => {
 					}).then(res => res.json())
 						.then(json => {
 							const data = json.data || {}, session = data.session || {};
-							let sessionId = session.id;
-							let content_src_id_sets = session.content_src_id_sets;
-							let videoFormat =
-								content_src_id_sets[0].content_src_ids[0].src_id_to_mux.video_src_ids[0];
-							let audioFormat =
-								content_src_id_sets[0].content_src_ids[0].src_id_to_mux.audio_src_ids[0];
+							const sessionId = session.id;
+							const content_src_id_sets = session.content_src_id_sets;
+							const {
+								video_src_ids: [videoFormat],
+								audio_src_ids: [audioFormat],
+							} = content_src_id_sets[0].content_src_ids[0].src_id_to_mux;
 							this._heartBeatUrl =
 								`${baseUrl}/${sessionId}?_format=json&_method=PUT`;
 							this._deleteSessionUrl =
@@ -32668,7 +32678,10 @@ const VideoSessionWorker = (() => {
 							this.info = {
 								url: session.content_uri,
 								sessionId,
-								videoFormat,
+								video: {
+									format: videoFormat,
+									label: dmcInfo.availableVideos.find(v => videoFormat === v.id).metadata.label,
+								},
 								audioFormat,
 								heartBeatUrl: this._heartBeatUrl,
 								deleteSessionUrl: this._deleteSessionUrl,

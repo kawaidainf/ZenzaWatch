@@ -18,7 +18,7 @@
 // @match          *://*.nicovideo.jp/smile*
 // @match          *://site.nicovideo.jp/*
 // @match          *://anime.nicovideo.jp/*
-// @match          https://www.upload.nicovideo.jp/garage/*
+// @match          https://www.upload.nicovideo.jp/niconico-garage/video/*
 // @match          https://www.google.co.jp/search*
 // @match          https://www.google.com/search*
 // @match          https://*.bing.com/search*
@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.6.3-fix-playlist.37
+// @version        2.6.3-fix-playlist.39
 // @run-at         document-body
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
 // ==/UserScript==

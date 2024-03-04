@@ -14,15 +14,15 @@
 // @match          *://*.nicovideo.jp/smile*
 // @match          *://site.nicovideo.jp/*
 // @match          *://anime.nicovideo.jp/*
+// @match          https://www.upload.nicovideo.jp/niconico-garage/video/*
 // @exclude        *://ads.nicovideo.jp/*
-// @exclude        *://www.upload.nicovideo.jp/*
 // @exclude        *://www.nicovideo.jp/watch/*?edit=*
 // @exclude        *://ch.nicovideo.jp/tool/*
 // @exclude        *://flapi.nicovideo.jp/*
 // @exclude        *://dic.nicovideo.jp/p/*
 // @grant          none
 // @author         segabito macmoto
-// @version        0.0.22-kphrx-patch.3
+// @version        0.0.22-kphrx-patch.4
 // @noframes
 // @require        https://cdn.jsdelivr.net/npm/hls.js@latest
 // @run-at         document-start
@@ -330,9 +330,9 @@ const workerUtil = (() => {
 					case 'commandResult':
 						if (promises[sessionId]) {
 							if (status === 'ok') {
-									promises[sessionId].resolve(params.result);
+								promises[sessionId].resolve(params.result);
 							} else {
-								promises[sessionId].reject(params.result);
+								promises[sessionId].reject(new Error(params.result));
 							}
 							delete promises[sessionId];
 						}
@@ -493,6 +493,7 @@ const workerUtil = (() => {
 			function (self) {
 			let config = {}, PRODUCT, TOKEN, CONSTANT, NAME = decodeURI('${encodeURI(name)}'), bcast = {}, portMap = {};
 			const {Handler, PromiseHandler, Emitter} = (${EmitterInitFunc.toString()})();
+			${options.inject ?? ''}
 			(${func.toString()})(self);
 			//===================================
 			(${messageWrapper.toString()})(self);
@@ -513,7 +514,7 @@ const workerUtil = (() => {
 								if (status === 'ok') {
 									promises[sessionId].resolve(params.result);
 								} else {
-									promises[sessionId].reject(params.result);
+									promises[sessionId].reject(new Error(params.result));
 								}
 								delete promises[sessionId];
 							}

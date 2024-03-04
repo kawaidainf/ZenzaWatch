@@ -10,11 +10,12 @@ const VideoSessionWorker = (() => {
     const SESSION_CLOSE_FAIL_COUNT = 3;
 
     const VIDEO_QUALITY = {
-      auto: /.*/,
-      veryhigh: /_(1080p)$/,
-      high: /_(720p)$/,
-      mid: /_(540p|480p)$/,
-      low: /_(360p)$/
+      auto: "auto",
+      veryhigh: "1080p",
+      high: "720p",
+      mid: "480p",
+      low: "360p",
+      verylow: "低画質",
     };
 
     const util = {
@@ -61,21 +62,22 @@ const VideoSessionWorker = (() => {
       toString() {
         let dmcInfo = this._dmcInfo;
 
-        const availableVideos = dmcInfo.availableVideoIds;
-        const reg = VIDEO_QUALITY[this._videoQuality] || VIDEO_QUALITY.auto;
+        const label = VIDEO_QUALITY[this._videoQuality] || VIDEO_QUALITY.auto;
         let videos;
-        if (reg === VIDEO_QUALITY.auto) {
-          videos = availableVideos;
+        if (label === VIDEO_QUALITY.auto) {
+          videos = dmcInfo.availableVideoIds;
         } else {
-          videos = [availableVideos.find(v => reg.test(v)) ?? availableVideos[0]];
+          const { availableVideos } = dmcInfo;
+          const video = availableVideos.find(v => label === v.metadata.label) ?? availableVideos[0];
+          videos = [video.id]
         }
 
-        const audios = [dmcInfo.availableAudioIds[0]];
+        const audio = dmcInfo.availableAudioIds[0];
 
         let contentSrcIdSets =
-          (this._useHLS && reg === VIDEO_QUALITY.auto)
-          ? this._buildAbrContentSrcIdSets(videos, audios)
-          : this._buildContentSrcIdSets(videos, audios);
+          (this._useHLS && label === VIDEO_QUALITY.auto)
+          ? this._buildAbrContentSrcIdSets(videos, audio)
+          : this._buildContentSrcIdSets(videos, audio);
 
         let http_parameters = {};
         let parameters = {
@@ -140,13 +142,13 @@ const VideoSessionWorker = (() => {
         return JSON.stringify(request, null, 2);
       }
 
-      _buildContentSrcIdSets(videos, audios) {
+      _buildContentSrcIdSets(videos, audio) {
         return [
           {
             content_src_ids: [
               {
                 src_id_to_mux: {
-                  audio_src_ids: audios,
+                  audio_src_ids: [audio],
                   video_src_ids: videos
                 }
               }
@@ -155,13 +157,13 @@ const VideoSessionWorker = (() => {
         ];
       }
 
-      _buildAbrContentSrcIdSets(videos, audios) {
+      _buildAbrContentSrcIdSets(videos, audio) {
         const v = videos.concat();
         const contentSrcIds = [];
         while (v.length > 0) {
           contentSrcIds.push({
             src_id_to_mux: {
-              audio_src_ids: [audios[0]],
+              audio_src_ids: [audio],
               video_src_ids: v.concat()
             }
           });
@@ -265,11 +267,11 @@ const VideoSessionWorker = (() => {
         return {...this._videoSessionInfo, type: this.serverType};
       }
 
-      set info({ url, sessionId, videoFormat, audioFormat, heartBeatUrl, deleteSessionUrl, lastResponse }) {
+      set info({ url, sessionId, video, audioFormat, heartBeatUrl, deleteSessionUrl, lastResponse }) {
         this._videoSessionInfo = {
           url,
           sessionId,
-          videoFormat,
+          video,
           audioFormat,
           heartBeatUrl,
           deleteSessionUrl,
@@ -306,14 +308,19 @@ const VideoSessionWorker = (() => {
         if (!this._useHLS) {
           throw new Error('HLSに未対応');
         }
-        const audio = this._domandInfo.availableAudioIds[0];
-        const availableVideos = this._domandInfo.availableVideoIds;
-        let video;
+        const { availableVideos } = this._domandInfo;
+        const audioFormat = this._domandInfo.availableAudioIds[0];
+        let videos, videoFormat, videoLabel;
         if (this._videoQuality === 'auto') {
-          video = availableVideos[0];
+          videos = this._domandInfo.availableVideoIds;
+          const { id, label } = availableVideos[0];
+          videoFormat = id;
+          videoLabel = label;
         } else {
-          let reg = new RegExp(`-${this._videoQuality}$`);
-          video = availableVideos.find(v => reg.test(v)) ?? availableVideos[0];
+          const video = availableVideos.find(v => v.label === this._videoQuality) ?? availableVideos[0];
+          videoFormat = video.id;
+          videoLabel = video.label;
+          videos = [videoFormat];
         }
 
         const query = new URLSearchParams({ actionTrackId: this._videoInfo.actionTrackId });
@@ -328,23 +335,28 @@ const VideoSessionWorker = (() => {
             'X-Access-Right-Key': this._domandInfo.accessRightKey,
           },
           credentials: 'include',
-          body: JSON.stringify({outputs: [[video, audio]]})
+          body: JSON.stringify(this._buildOutputsMatrix(videos, audioFormat))
         }).then(res => res.json());
         if (result.meta.status == null || result.meta.status >= 300) {
           throw new Error('cannot create domand session', result)
         }
+
         this._lastResponse = result.data || {};
         const {
           contentUrl,
-          createTime,
+          // createTime,
           expireTime
         } = this._lastResponse;
         this._lastUpdate = Date.now();
         this._expireTime = new Date(expireTime);
+
         this.info = {
           url: contentUrl,
-          videoFormat: video,
-          audioFormat: audio,
+          video: {
+            format: videoFormat,
+            label: videoLabel,
+          },
+          audioFormat,
           lastResponse: result
         };
         console.timeEnd('create Domand session');
@@ -370,6 +382,12 @@ const VideoSessionWorker = (() => {
 
       get serverType() {
         return 'domand';
+      }
+
+      _buildOutputsMatrix(videoIds, audio) {
+        return {
+          outputs: videoIds.map(v => [v, audio]),
+        }
       }
     }
 
@@ -407,12 +425,12 @@ const VideoSessionWorker = (() => {
           }).then(res => res.json())
             .then(json => {
               const data = json.data || {}, session = data.session || {};
-              let sessionId = session.id;
-              let content_src_id_sets = session.content_src_id_sets;
-              let videoFormat =
-                content_src_id_sets[0].content_src_ids[0].src_id_to_mux.video_src_ids[0];
-              let audioFormat =
-                content_src_id_sets[0].content_src_ids[0].src_id_to_mux.audio_src_ids[0];
+              const sessionId = session.id;
+              const content_src_id_sets = session.content_src_id_sets;
+              const {
+                video_src_ids: [videoFormat],
+                audio_src_ids: [audioFormat],
+              } = content_src_id_sets[0].content_src_ids[0].src_id_to_mux;
 
               this._heartBeatUrl =
                 `${baseUrl}/${sessionId}?_format=json&_method=PUT`;
@@ -425,7 +443,10 @@ const VideoSessionWorker = (() => {
               this.info = {
                 url: session.content_uri,
                 sessionId,
-                videoFormat,
+                video: {
+                  format: videoFormat,
+                  label: dmcInfo.availableVideos.find(v => videoFormat === v.id).metadata.label,
+                },
                 audioFormat,
                 heartBeatUrl: this._heartBeatUrl,
                 deleteSessionUrl: this._deleteSessionUrl,
