@@ -444,6 +444,81 @@ const {SettingPanelElement} = (() => {
                 value="">
                 かんたんコメント
             </label>
+            <h4>種類</h4>
+            <label class="short">
+              <input type="checkbox"
+                data-setting-name="filter.defaultThread"
+                ?checked=${conf.filter.defaultThread}
+                value="">
+                通常コメント
+            </label>
+            <label class="short">
+              <input type="checkbox"
+                data-setting-name="filter.ownerThread"
+                ?checked=${conf.filter.ownerThread}
+                value="">
+                投稿者コメント
+            </label>
+            <label class="short">
+              <input type="checkbox"
+                data-setting-name="filter.communityThread"
+                ?checked=${conf.filter.communityThread}
+                value="">
+                チャンネルコメント / コミュニティコメント
+            </label>
+            <label class="short">
+              <input type="checkbox"
+                data-setting-name="filter.nicosThread"
+                ?checked=${conf.filter.nicosThread}
+                value="">
+                ニコスクリプトコメント
+            </label>
+            <label class="short">
+              <input type="checkbox"
+                data-setting-name="filter.easyThread"
+                ?checked=${conf.filter.easyThread}
+                value="">
+                かんたんコメント
+            </label>
+            <!--
+            <label class="short">
+              <input type="checkbox"
+                data-setting-name="filter.extraDefaultThread"
+                ?checked=${conf.filter.extraDefaultThread}
+                value="">
+                ***extra-default
+            </label>
+            <label class="short">
+              <input type="checkbox"
+                data-setting-name="filter.extraOwnerThread"
+                ?checked=${conf.filter.extraOwnerThread}
+                value="">
+                ***extra-owner
+            </label>
+            -->
+            <label class="short">
+              <input type="checkbox"
+                data-setting-name="filter.extraCommunityThread"
+                ?checked=${conf.filter.extraCommunityThread}
+                value="">
+                引用コメント
+            </label>
+            <!--
+            <label class="short">
+              <input type="checkbox"
+                data-setting-name="filter.extraNicosThread"
+                ?checked=${conf.filter.extraNicosThread}
+                value="">
+                ***extra-nicos
+            </label>
+            -->
+            <label class="short">
+              <input type="checkbox"
+                data-setting-name="filter.extraEasyThread"
+                ?checked=${conf.filter.extraEasyThread}
+                value="">
+                引用かんたんコメント
+            </label>
           </div>
           <div class="control">
             <h3>NGワード</h3>

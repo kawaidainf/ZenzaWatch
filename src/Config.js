@@ -55,9 +55,21 @@ const Config = (() => {
     userIdFilter: '',
     commandFilter: '',
     removeNgMatchedUser: false, // NGにマッチしたユーザーのコメント全部消す
+
     'filter.fork0': true, // 通常コメント
     'filter.fork1': true, // 投稿者コメント
     'filter.fork2': true, // かんたんコメント
+
+    'filter.defaultThread': true, // 通常コメント
+    'filter.ownerThread': true, // 投稿者コメント
+    'filter.communityThread': true, // チャンネルコメント / コミュニティコメント
+    'filter.nicosThread': true, // ニコスクリプトコメント
+    'filter.easyThread': true, // かんたんコメント
+    'filter.extraDefaultThread': true, // ***extra-default
+    'filter.extraOwnerThread': true, // ***extra-owner
+    'filter.extraCommunityThread': true, // 引用コメント
+    'filter.extraNicosThread': true, // ***extra-nicos
+    'filter.extraEasyThread': true, // 引用かんたんコメント
 
     videoTagFilter: '',
     videoOwnerFilter: '',

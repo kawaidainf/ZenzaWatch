@@ -53,22 +53,6 @@ class NicoComment extends Emitter {
   }
   setThreads(data, options) {
     const chatsData = data.threads.flatMap(thread => {
-      let fork;
-      switch (thread.fork) {
-        case 'main':
-          fork = 0;
-          break;
-        case 'owner':
-          fork = 1;
-          break;
-        case 'easy':
-          fork = 2;
-          break;
-        default:
-          fork = 3;
-          break;
-      }
-
       return thread.comments.map(c => {
         return Object.assign({
           text: c.body,
@@ -77,10 +61,12 @@ class NicoComment extends Emitter {
           premium: c.isPremium,
           user_id: c.userId,
           vpos: c.vposMs / 10,
-          fork,
+          fork: thread.info.fork,
           isMine: c.isMyPost,
           thread: thread.id,
           nicoru: c.nicoruCount,
+          layerId: thread.info.layer.index,
+          threadLabel: thread.info.label,
         }, c);
       })
     });

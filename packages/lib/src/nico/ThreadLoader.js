@@ -171,9 +171,10 @@ const {ThreadLoader} = (() => {
 
       let totalResCount = result.globalComments.reduce((count, current) => (count + current.count), 0);
       for (const thread of result.threads) {
-        const forkLabel = thread.fork;
+        const fork = thread.fork;
+        thread.info = msgInfo.threads.find(({id, forkLabel}) => `${id}` === thread.id && forkLabel === fork);
         // 投稿者コメントはGlobalにカウントされていない
-        if (forkLabel === 'easy') {
+        if (fork === 'easy') {
           // かんたんコメントをカウントしていない挙動に合わせる。不要？
           const resCount = thread.commentCount;
           totalResCount -= resCount;

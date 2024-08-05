@@ -15,30 +15,8 @@ const debug = {};
 const VideoInfoLoader = (function () {
   const cacheStorage = new CacheStorage(sessionStorage);
 
-  const parseFromHtml5Watch = function (dom) {
-    const watchDataContainer = dom.querySelector('#js-initial-watch-data');
-    const {
-      // baseURL,
-      frontendId,
-      frontendVersion,
-      i18n: {
-        // area,
-        footer: i18nFooter,
-        language: i18nLanguage,
-        // locale,
-      },
-      // isMonitoringLogUser,
-      // newPlaylistRate,
-      // newRelatedVideos,
-      playlistToken, //項目は残ってるけど値は出なくなってる
-      // urls,
-    } = JSON.parse(watchDataContainer.getAttribute('data-environment'));
-    // i18n.footer.availableLanguageList がないことがある？ GH-31
-    // setcountryToken,
-    // setcountryURL,
-    const availableLanguageList = i18nFooter?.availableLanguageList ?? [];
-
-    const _data = JSON.parse(watchDataContainer.getAttribute('data-api-data'));
+  const parseWatchApiData = function (json) {
+    const _data = json.data.response;
     const {
       // ads,
       // category,
@@ -152,18 +130,14 @@ const VideoInfoLoader = (function () {
       // videoLive,
       viewer, // nullable
       // waku,
-    } = JSON.parse(watchDataContainer.getAttribute('data-api-data'));
+    } = _data;
 
     const hasLargeThumbnail = nicoUtil.hasLargeThumbnail(videoId);
     const csrfToken = null;
     const watchAuthKey = null;
-    layers.forEach(layer => {
-      layer.threadIds.forEach(({id, fork}) => {
-        threads.forEach(thread => {
-          if (thread.id === id && fork === 0) {
-            thread.layer = layer;
-          }
-        });
+    threads.forEach(thread => {
+      thread.layer = layers.find(({threadIds}) => {
+        return threadIds.some(({id, fork}) => id === thread.id && fork === thread.fork);
       });
     });
     const resumeInfo = (() => {
@@ -200,11 +174,8 @@ const VideoInfoLoader = (function () {
       userKey,
       hasOwnerThread: threads.find(t => t.isOwnerThread),
       when: null,
-      language: i18nLanguage,
-      i18nLanguage,
-      availableLanguageList,
-      frontendId,
-      frontendVersion
+      frontendId: 6,
+      frontendVersion: 0
     };
 
     const isDmc = dmcInfo?.movie.session != null;
@@ -334,7 +305,6 @@ const VideoInfoLoader = (function () {
       thumbnailUrl,
       csrfToken,
       watchAuthKey,
-      playlistToken,
       series,
       genreKey,
       ngFilters,
@@ -351,22 +321,6 @@ const VideoInfoLoader = (function () {
   };
 
 
-  const parseWatchApiData = function (src) {
-    const dom = new DOMParser().parseFromString(src, 'text/html');
-    if (dom.querySelector('#js-initial-watch-data')) {
-      return parseFromHtml5Watch(dom);
-    } else if (dom.querySelector('#PAGEBODY .mb16p4 .font12')) {
-      return {
-        reject: true,
-        reason: 'forbidden',
-        message: dom.querySelector('#PAGEBODY .mb16p4 .font12').textContent,
-      };
-    } else {
-      return null;
-    }
-  };
-
-
   const loadLinkedChannelVideoInfo = (originalData) => {
     const linkedChannelVideo = originalData.linkedChannelVideo;
     const originalVideoId = originalData.watchApiData.videoDetail.id;
@@ -377,15 +331,14 @@ const VideoInfoLoader = (function () {
       return Promise.reject();
     }
 
-    const url = `https://www.nicovideo.jp/watch/${videoId}`;
+    const url = `https://www.nicovideo.jp/watch/${videoId}?responseType=json`;
     window.console.info('%cloadLinkedChannelVideoInfo', 'background: cyan', linkedChannelVideo);
     return new Promise(r => {
       setTimeout(r, 1000);
     }).then(() => netUtil.fetch(url, {credentials: 'include'}))
-      .then(res => res.text())
-      .then(html => {
-        const dom = new DOMParser().parseFromString(html, 'text/html');
-        const data = parseFromHtml5Watch(dom);
+      .then(res => res.json())
+      .then(json => {
+        const data = parseWatchApiData(json);
         //window.console.info('linkedChannelData', data);
         originalData.dmcInfo = data.dmcInfo;
         originalData.isDmcOnly = data.isDmcOnly;
@@ -478,7 +431,7 @@ const VideoInfoLoader = (function () {
   const loadPromise = function (watchId, options, isRetry = false) {
     let url = `https://www.nicovideo.jp/watch/${watchId}`;
     console.log('%cloadFromWatchApiData...', 'background: lightgreen;', watchId, url);
-    const query = [];
+    const query = ['responseType=json'];
     if (options.economy === true) {
       query.push('eco=1');
     }
@@ -487,7 +440,7 @@ const VideoInfoLoader = (function () {
     }
 
     return netUtil.fetch(url, {credentials: 'include'})
-      .then(res => res.text())
+      .then(res => res.json())
       .catch(() => Promise.reject({reason: 'network', message: '通信エラー(network)'}))
       .then(onLoadPromise.bind(this, watchId, options, isRetry))
       .catch(err => {

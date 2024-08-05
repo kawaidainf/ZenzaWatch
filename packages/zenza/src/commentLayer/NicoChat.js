@@ -308,6 +308,7 @@ class NicoChat {
   get fontCommand() {return this.props.fontCommand;}
   get commentVer() {return this.props.commentVer;}
   get threadId() {return this.props.thread;}
+  get threadLabel() {return this.props.threadLabel;}
   get nicoru() {return this.props.nicoru;}
   set nicoru(v) {this.props.nicoru = v;}
   get nicotta() { return !!this.props.nicotta;}

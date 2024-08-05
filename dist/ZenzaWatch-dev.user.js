@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.6.3-fix-playlist.39
+// @version        2.6.3-fix-playlist.40
 // @run-at         document-body
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
 // @updateURL      https://github.com/kawaidainf/ZenzaWatch/raw/kawaidainf-patch-1/dist/ZenzaWatch-dev.user.js
@@ -101,7 +101,7 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.6.3-fix-playlist.39';
+    var VER = '2.6.3-fix-playlist.40';
     const ENV = 'DEV';
 
 
@@ -807,6 +807,16 @@ const Config = (() => {
 		'filter.fork0': true, // 通常コメント
 		'filter.fork1': true, // 投稿者コメント
 		'filter.fork2': true, // かんたんコメント
+		'filter.defaultThread': true, // 通常コメント
+		'filter.ownerThread': true, // 投稿者コメント
+		'filter.communityThread': true, // チャンネルコメント / コミュニティコメント
+		'filter.nicosThread': true, // ニコスクリプトコメント
+		'filter.easyThread': true, // かんたんコメント
+		'filter.extraDefaultThread': true, // ***extra-default
+		'filter.extraOwnerThread': true, // ***extra-owner
+		'filter.extraCommunityThread': true, // 引用コメント
+		'filter.extraNicosThread': true, // ***extra-nicos
+		'filter.extraEasyThread': true, // 引用かんたんコメント
 		videoTagFilter: '',
 		videoOwnerFilter: '',
 		enableCommentPanel: true,
@@ -5265,11 +5275,16 @@ const {DialogElement, DialogProps} = (() => {
 					margin: 0 8px 0 0;
 					text-align: left;
 				}
-				h3 {
+				h3, h4 {
 					margin: 0 auto;
-					width: calc(100% - 16px);
 					background: rgba(192, 192, 192, 0.8);
 					box-shadow: none;
+				}
+				h3 {
+					width: calc(100% - 16px);
+				}
+				h4 {
+					width: calc(100% - 32px);
 				}
 				summary {
 					margin: 0 0 16px;
@@ -5791,6 +5806,81 @@ const {SettingPanelElement} = (() => {
 								value="">
 								かんたんコメント
 						</label>
+						<h4>種類</h4>
+						<label class="short">
+							<input type="checkbox"
+								data-setting-name="filter.defaultThread"
+								?checked=${conf.filter.defaultThread}
+								value="">
+								通常コメント
+						</label>
+						<label class="short">
+							<input type="checkbox"
+								data-setting-name="filter.ownerThread"
+								?checked=${conf.filter.ownerThread}
+								value="">
+								投稿者コメント
+						</label>
+						<label class="short">
+							<input type="checkbox"
+								data-setting-name="filter.communityThread"
+								?checked=${conf.filter.communityThread}
+								value="">
+								チャンネルコメント / コミュニティコメント
+						</label>
+						<label class="short">
+							<input type="checkbox"
+								data-setting-name="filter.nicosThread"
+								?checked=${conf.filter.nicosThread}
+								value="">
+								ニコスクリプトコメント
+						</label>
+						<label class="short">
+							<input type="checkbox"
+								data-setting-name="filter.easyThread"
+								?checked=${conf.filter.easyThread}
+								value="">
+								かんたんコメント
+						</label>
+						<!--
+						<label class="short">
+							<input type="checkbox"
+								data-setting-name="filter.extraDefaultThread"
+								?checked=${conf.filter.extraDefaultThread}
+								value="">
+								***extra-default
+						</label>
+						<label class="short">
+							<input type="checkbox"
+								data-setting-name="filter.extraOwnerThread"
+								?checked=${conf.filter.extraOwnerThread}
+								value="">
+								***extra-owner
+						</label>
+						-->
+						<label class="short">
+							<input type="checkbox"
+								data-setting-name="filter.extraCommunityThread"
+								?checked=${conf.filter.extraCommunityThread}
+								value="">
+								引用コメント
+						</label>
+						<!--
+						<label class="short">
+							<input type="checkbox"
+								data-setting-name="filter.extraNicosThread"
+								?checked=${conf.filter.extraNicosThread}
+								value="">
+								***extra-nicos
+						</label>
+						-->
+						<label class="short">
+							<input type="checkbox"
+								data-setting-name="filter.extraEasyThread"
+								?checked=${conf.filter.extraEasyThread}
+								value="">
+								引用かんたんコメント
+						</label>
 					</div>
 					<div class="control">
 						<h3>NGワード</h3>
@@ -6263,19 +6353,8 @@ const CacheStorage = (() => {
 })();
 const VideoInfoLoader = (function () {
 	const cacheStorage = new CacheStorage(sessionStorage);
-	const parseFromHtml5Watch = function (dom) {
-		const watchDataContainer = dom.querySelector('#js-initial-watch-data');
-		const {
-			frontendId,
-			frontendVersion,
-			i18n: {
-				footer: i18nFooter,
-				language: i18nLanguage,
-			},
-			playlistToken, //項目は残ってるけど値は出なくなってる
-		} = JSON.parse(watchDataContainer.getAttribute('data-environment'));
-		const availableLanguageList = i18nFooter?.availableLanguageList ?? [];
-		const _data = JSON.parse(watchDataContainer.getAttribute('data-api-data'));
+	const parseWatchApiData = function (json) {
+		const _data = json.data.response;
 		const {
 			channel, // nullable
 			client: {
@@ -6345,17 +6424,13 @@ const VideoInfoLoader = (function () {
 				viewer: videoStatusForViewer, // nullable
 			},
 			viewer, // nullable
-		} = JSON.parse(watchDataContainer.getAttribute('data-api-data'));
+		} = _data;
 		const hasLargeThumbnail = nicoUtil.hasLargeThumbnail(videoId);
 		const csrfToken = null;
 		const watchAuthKey = null;
-		layers.forEach(layer => {
-			layer.threadIds.forEach(({id, fork}) => {
-				threads.forEach(thread => {
-					if (thread.id === id && fork === 0) {
-						thread.layer = layer;
-					}
-				});
+		threads.forEach(thread => {
+			thread.layer = layers.find(({threadIds}) => {
+				return threadIds.some(({id, fork}) => id === thread.id && fork === thread.fork);
 			});
 		});
 		const resumeInfo = (() => {
@@ -6392,11 +6467,8 @@ const VideoInfoLoader = (function () {
 			userKey,
 			hasOwnerThread: threads.find(t => t.isOwnerThread),
 			when: null,
-			language: i18nLanguage,
-			i18nLanguage,
-			availableLanguageList,
-			frontendId,
-			frontendVersion
+			frontendId: 6,
+			frontendVersion: 0
 		};
 		const isDmc = dmcInfo?.movie.session != null;
 		const isDomand = domandInfo != null;
@@ -6489,7 +6561,6 @@ const VideoInfoLoader = (function () {
 			thumbnailUrl,
 			csrfToken,
 			watchAuthKey,
-			playlistToken,
 			series,
 			genreKey,
 			ngFilters,
@@ -6502,20 +6573,6 @@ const VideoInfoLoader = (function () {
 		emitter.emitAsync('csrfTokenUpdate', csrfToken);
 		return result;
 	};
-	const parseWatchApiData = function (src) {
-		const dom = new DOMParser().parseFromString(src, 'text/html');
-		if (dom.querySelector('#js-initial-watch-data')) {
-			return parseFromHtml5Watch(dom);
-		} else if (dom.querySelector('#PAGEBODY .mb16p4 .font12')) {
-			return {
-				reject: true,
-				reason: 'forbidden',
-				message: dom.querySelector('#PAGEBODY .mb16p4 .font12').textContent,
-			};
-		} else {
-			return null;
-		}
-	};
 	const loadLinkedChannelVideoInfo = (originalData) => {
 		const linkedChannelVideo = originalData.linkedChannelVideo;
 		const originalVideoId = originalData.watchApiData.videoDetail.id;
@@ -6524,15 +6581,14 @@ const VideoInfoLoader = (function () {
 		if (originalVideoId === videoId) {
 			return Promise.reject();
 		}
-		const url = `https://www.nicovideo.jp/watch/${videoId}`;
+		const url = `https://www.nicovideo.jp/watch/${videoId}?responseType=json`;
 		window.console.info('%cloadLinkedChannelVideoInfo', 'background: cyan', linkedChannelVideo);
 		return new Promise(r => {
 			setTimeout(r, 1000);
 		}).then(() => netUtil.fetch(url, {credentials: 'include'}))
-			.then(res => res.text())
-			.then(html => {
-				const dom = new DOMParser().parseFromString(html, 'text/html');
-				const data = parseFromHtml5Watch(dom);
+			.then(res => res.json())
+			.then(json => {
+				const data = parseWatchApiData(json);
 				originalData.dmcInfo = data.dmcInfo;
 				originalData.isDmcOnly = data.isDmcOnly;
 				originalData.isPlayable = data.isPlayable;
@@ -6617,7 +6673,7 @@ const VideoInfoLoader = (function () {
 	const loadPromise = function (watchId, options, isRetry = false) {
 		let url = `https://www.nicovideo.jp/watch/${watchId}`;
 		console.log('%cloadFromWatchApiData...', 'background: lightgreen;', watchId, url);
-		const query = [];
+		const query = ['responseType=json'];
 		if (options.economy === true) {
 			query.push('eco=1');
 		}
@@ -6625,7 +6681,7 @@ const VideoInfoLoader = (function () {
 			url += '?' + query.join('&');
 		}
 		return netUtil.fetch(url, {credentials: 'include'})
-			.then(res => res.text())
+			.then(res => res.json())
 			.catch(() => Promise.reject({reason: 'network', message: '通信エラー(network)'}))
 			.then(onLoadPromise.bind(this, watchId, options, isRetry))
 			.catch(err => {
@@ -8853,8 +8909,9 @@ const {ThreadLoader} = (() => {
 			debug.lastMessageServerResult = result;
 			let totalResCount = result.globalComments.reduce((count, current) => (count + current.count), 0);
 			for (const thread of result.threads) {
-				const forkLabel = thread.fork;
-				if (forkLabel === 'easy') {
+				const fork = thread.fork;
+				thread.info = msgInfo.threads.find(({id, forkLabel}) => `${id}` === thread.id && forkLabel === fork);
+				if (fork === 'easy') {
 					const resCount = thread.commentCount;
 					totalResCount -= resCount;
 				}
@@ -9270,6 +9327,16 @@ class NicoVideoPlayer extends Emitter {
 				fork0: conf.props['filter.fork0'],
 				fork1: conf.props['filter.fork1'],
 				fork2: conf.props['filter.fork2'],
+				defaultThread: conf.props['filter.defaultThread'],
+				ownerThread: conf.props['filter.ownerThread'],
+				communityThread: conf.props['filter.communityThread'],
+				nicosThread: conf.props['filter.nicosThread'],
+				easyThread: conf.props['filter.easyThread'],
+				extraDefaultThread: conf.props['filter.extraDefaultThread'],
+				extraOwnerThread: conf.props['filter.extraOwnerThread'],
+				extraCommunityThread: conf.props['filter.extraCommunityThread'],
+				extraNicosThread: conf.props['filter.extraNicosThread'],
+				extraEasyThread: conf.props['filter.extraEasyThread'],
 				sharedNgLevel: conf.props.sharedNgLevel
 			},
 			showComment: conf.props.showComment,
@@ -15336,6 +15403,7 @@ class NicoChat {
 	get fontCommand() {return this.props.fontCommand;}
 	get commentVer() {return this.props.commentVer;}
 	get threadId() {return this.props.thread;}
+	get threadLabel() {return this.props.threadLabel;}
 	get nicoru() {return this.props.nicoru;}
 	set nicoru(v) {this.props.nicoru = v;}
 	get nicotta() { return !!this.props.nicotta;}
@@ -16162,6 +16230,16 @@ class NicoChatFilter extends Emitter {
 		this._fork0 = typeof params.fork0 === 'boolean' ? params.fork0 : true;
 		this._fork1 = typeof params.fork1 === 'boolean' ? params.fork1 : true;
 		this._fork2 = typeof params.fork2 === 'boolean' ? params.fork2 : true;
+		this._defaultThread = typeof params.defaultThread === 'boolean' ? params.defaultThread : true;
+		this._ownerThread = typeof params.ownerThread === 'boolean' ? params.ownerThread : true;
+		this._communityThread = typeof params.communityThread === 'boolean' ? params.communityThread : true;
+		this._nicosThread = typeof params.nicosThread === 'boolean' ? params.nicosThread : true;
+		this._easyThread = typeof params.easyThread === 'boolean' ? params.easyThread : true;
+		this._extraDefaultThread = typeof params.extraDefaultThread === 'boolean' ? params.extraDefaultThread : true;
+		this._extraOwnerThread = typeof params.extraOwnerThread === 'boolean' ? params.extraOwnerThread : true;
+		this._extraCommunityThread = typeof params.extraCommunityThread === 'boolean' ? params.extraCommunityThread : true;
+		this._extraNicosThread = typeof params.extraNicosThread === 'boolean' ? params.extraNicosThread : true;
+		this._extraEasyThread = typeof params.extraEasyThread === 'boolean' ? params.extraEasyThread : true;
 		this._enable = typeof params.enableFilter === 'boolean' ? params.enableFilter : true;
 		this._wordReg = null;
 		this._wordRegReg = null;
@@ -16211,6 +16289,76 @@ class NicoChatFilter extends Emitter {
 		v = !!v;
 		if (this._fork2 === v) { return; }
 		this._fork2 = v;
+		this.refresh();
+	}
+	get defaultThread() { return this._defaultThread; }
+	set defaultThread(v) {
+		v = !!v;
+		if (this._defaultThread === v) { return; }
+		this._defaultThread = v;
+		this.refresh();
+	}
+	get ownerThread() { return this._ownerThread; }
+	set ownerThread(v) {
+		v = !!v;
+		if (this._ownerThread === v) { return; }
+		this._ownerThread = v;
+		this.refresh();
+	}
+	get communityThread() { return this._communityThread; }
+	set communityThread(v) {
+		v = !!v;
+		if (this._communityThread === v) { return; }
+		this._communityThread = v;
+		this.refresh();
+	}
+	get nicosThread() { return this._nicosThread; }
+	set nicosThread(v) {
+		v = !!v;
+		if (this._nicosThread === v) { return; }
+		this._nicosThread = v;
+		this.refresh();
+	}
+	get easyThread() { return this._easyThread; }
+	set easyThread(v) {
+		v = !!v;
+		if (this._easyThread === v) { return; }
+		this._easyThread = v;
+		this.refresh();
+	}
+	get extraDefaultThread() { return this._extraDefaultThread; }
+	set extraDefaultThread(v) {
+		v = !!v;
+		if (this._extraDefaultThread === v) { return; }
+		this._extraDefaultThread = v;
+		this.refresh();
+	}
+	get extraOwnerThread() { return this._extraOwnerThread; }
+	set extraOwnerThread(v) {
+		v = !!v;
+		if (this._extraOwnerThread === v) { return; }
+		this._extraOwnerThread = v;
+		this.refresh();
+	}
+	get extraCommunityThread() { return this._extraCommunityThread; }
+	set extraCommunityThread(v) {
+		v = !!v;
+		if (this._extraCommunityThread === v) { return; }
+		this._extraCommunityThread = v;
+		this.refresh();
+	}
+	get extraNicosThread() { return this._extraNicosThread; }
+	set extraNicosThread(v) {
+		v = !!v;
+		if (this._extraNicosThread === v) { return; }
+		this._extraNicosThread = v;
+		this.refresh();
+	}
+	get extraEasyThread() { return this._extraEasyThread; }
+	set extraEasyThread(v) {
+		v = !!v;
+		if (this._extraEasyThread === v) { return; }
+		this._extraEasyThread = v;
 		this.refresh();
 	}
 	refresh() { this._onChange(); }
@@ -16411,26 +16559,40 @@ class NicoChatFilter extends Emitter {
 		};
 	}
 	applyFilter(nicoChatArray) {
-		let before = nicoChatArray.length;
+		const before = nicoChatArray.length;
 		if (before < 1) {
 			return nicoChatArray;
 		}
-		let timeKey = 'applyNgFilter: ' + nicoChatArray[0].type;
+		const timeKey = 'applyNgFilter: ' + nicoChatArray[0].type;
 		window.console.time(timeKey);
-		let filterFunc = this.getFilterFunc();
+		const filterFunc = this.getFilterFunc();
 		let result = nicoChatArray.filter(filterFunc);
-		if (before.length !== result.length && this._removeNgMatchedUser) {
-			let removedUserIds =
-				nicoChatArray.filter(chat => !result.includes(chat)).map(chat => chat.userId);
-			result = result.filter(chat => !removedUserIds.includes(chat.userId));
-		}
-		if (!this.fork0 || !this.fork1 || !this.fork2) {
-			const allows = [];
-			this._fork0 && allows.push(0);
-			this._fork1 && allows.push(1);
-			this._fork2 && allows.push(2);
-			result = result.filter(chat => allows.includes(chat.fork));
-		}
+		const removedUserIds = (before !== result.length && this._removeNgMatchedUser)
+			? nicoChatArray.filter(chat => !result.includes(chat)).map(chat => chat.userId)
+			: [];
+		const denyTypes = [
+			!this.fork0 && 0,
+			!this.fork1 && 1,
+			!this.fork2 && 2,
+		].filter(type => type !== false);
+		const denyThreadTypes = [
+			!this.defaultThread        && 'default',
+			!this.ownerThread          && 'owner',
+			!this.communityThread      && 'community',
+			!this.nicosThread          && 'nicos',
+			!this.easyThread           && 'easy',
+			!this.extraDefaultThread   && 'extra-default',
+			!this.extraOwnerThread     && 'extra-owner',
+			!this.extraCommunityThread && 'extra-community',
+			!this.extraNicosThread     && 'extra-nicos',
+			!this.extraEasyThread      && 'extra-easy',
+		].filter(type => type !== false);
+		result = result.filter(chat => {
+			if (removedUserIds.length > 0 && removedUserIds.includes(chat.userId)) {
+				return false;
+			}
+			return !denyTypes.includes(chat.fork) && !denyThreadTypes.includes(chat.threadLabel);
+		});
 		window.console.timeEnd(timeKey);
 		window.console.log('NG判定結果: %s/%s', result.length, before);
 		return result;
@@ -16623,21 +16785,6 @@ class NicoComment extends Emitter {
 	}
 	setThreads(data, options) {
 		const chatsData = data.threads.flatMap(thread => {
-			let fork;
-			switch (thread.fork) {
-				case 'main':
-					fork = 0;
-					break;
-				case 'owner':
-					fork = 1;
-					break;
-				case 'easy':
-					fork = 2;
-					break;
-				default:
-					fork = 3;
-					break;
-			}
 			return thread.comments.map(c => {
 				return Object.assign({
 					text: c.body,
@@ -16646,10 +16793,12 @@ class NicoComment extends Emitter {
 					premium: c.isPremium,
 					user_id: c.userId,
 					vpos: c.vposMs / 10,
-					fork,
+					fork: thread.info.fork,
 					isMine: c.isMyPost,
 					thread: thread.id,
 					nicoru: c.nicoruCount,
+					layerId: thread.info.layer.index,
+					threadLabel: thread.info.label,
 				}, c);
 			})
 		});
@@ -24639,7 +24788,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				this.reload({videoServerType: param === 'domand' ? 'domand' : 'dmc'});
 				break;
 			case 'update-commentLanguage':
-				if (this._playerConfig.props.commentLanguage === param || this._videoInfo.msgInfo.i18nLanguage === 'ja-jp') {
+				if (this._playerConfig.props.commentLanguage === param) {
 					break;
 				}
 				this._playerConfig.props.commentLanguage = param;
@@ -24738,6 +24887,16 @@ class NicoVideoPlayerDialog extends Emitter {
 			case 'filter.fork0':
 			case 'filter.fork1':
 			case 'filter.fork2':
+			case 'filter.defaultThread':
+			case 'filter.ownerThread':
+			case 'filter.communityThread':
+			case 'filter.nicosThread':
+			case 'filter.easyThread':
+			case 'filter.extraDefaultThread':
+			case 'filter.extraOwnerThread':
+			case 'filter.extraCommunityThread':
+			case 'filter.extraNicosThread':
+			case 'filter.extraEasyThread':
 			case 'removeNgMatchedUser':
 				filter[key.replace(/^.*\./, '')] = value;
 				break;
@@ -25146,7 +25305,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		});
 	}
 	loadComment(msgInfo) {
-		msgInfo.language = msgInfo.i18nLanguage === 'ja-jp' ? 'ja-jp' : this._playerConfig.props.commentLanguage;
+		msgInfo.language = this._playerConfig.props.commentLanguage;
 		this._playerConfig.props.commentLanguage = msgInfo.language;
 		this.threadLoader.load(msgInfo).then(
 			this._onCommentLoadSuccess.bind(this, this._requestId),

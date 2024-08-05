@@ -1591,7 +1591,7 @@ class NicoVideoPlayerDialog extends Emitter {
         this.reload({videoServerType: param === 'domand' ? 'domand' : 'dmc'});
         break;
       case 'update-commentLanguage':
-        if (this._playerConfig.props.commentLanguage === param || this._videoInfo.msgInfo.i18nLanguage === 'ja-jp') {
+        if (this._playerConfig.props.commentLanguage === param) {
           break;
         }
         this._playerConfig.props.commentLanguage = param;
@@ -1691,6 +1691,16 @@ class NicoVideoPlayerDialog extends Emitter {
       case 'filter.fork0':
       case 'filter.fork1':
       case 'filter.fork2':
+      case 'filter.defaultThread':
+      case 'filter.ownerThread':
+      case 'filter.communityThread':
+      case 'filter.nicosThread':
+      case 'filter.easyThread':
+      case 'filter.extraDefaultThread':
+      case 'filter.extraOwnerThread':
+      case 'filter.extraCommunityThread':
+      case 'filter.extraNicosThread':
+      case 'filter.extraEasyThread':
       case 'removeNgMatchedUser':
         filter[key.replace(/^.*\./, '')] = value;
         break;
@@ -2143,7 +2153,7 @@ class NicoVideoPlayerDialog extends Emitter {
     });
   }
   loadComment(msgInfo) {
-    msgInfo.language = msgInfo.i18nLanguage === 'ja-jp' ? 'ja-jp' : this._playerConfig.props.commentLanguage;
+    msgInfo.language = this._playerConfig.props.commentLanguage;
     this._playerConfig.props.commentLanguage = msgInfo.language;
     this.threadLoader.load(msgInfo).then(
       this._onCommentLoadSuccess.bind(this, this._requestId),
