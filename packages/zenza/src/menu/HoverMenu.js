@@ -142,7 +142,7 @@ class HoverMenu {
       };
       uq('body').on('mouseover', e => {
           const target = e.target;
-          if (target.tagName !== 'A' || !target.closest('.NicorepoItem_video')) {
+          if (target.tagName !== 'A' || !target.closest('.TimelineItem_video')) {
             return;
           }
           // console.nicoru('mouseover', target.tagName);
@@ -165,7 +165,7 @@ class HoverMenu {
         return;
       }
 
-      if (target.closest('.NicorepoItem_video')) {
+      if (target.closest('.TimelineItem_video')) {
         // console.nicoru('nicorepoi', target, target.href);
         e.stopPropagation();
         // history.pushState(null, null, target.href);

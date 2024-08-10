@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.6.3-fix-playlist.40
+// @version        2.6.3-fix-playlist.43
 // @run-at         document-body
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
 // @updateURL      https://github.com/kawaidainf/ZenzaWatch/raw/kawaidainf-patch-1/dist/ZenzaWatch-dev.user.js
@@ -101,7 +101,7 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.6.3-fix-playlist.40';
+    var VER = '2.6.3-fix-playlist.43';
     const ENV = 'DEV';
 
 
@@ -1861,87 +1861,11 @@ const global = {
   NICORU,
   dll
 };
-class ClassListWrapper {
-	constructor(element) {
-		this.applyNow = this.apply.bind(this);
-		this.apply = throttle.raf(this.applyNow);
-		if (element) {
-			this.setElement(element);
-		} else {
-			this._next = new Set;
-			this._last = new Set;
-		}
-	}
-	setElement(element) {
-		if (this._element) {
-			this.applyNow();
-		}
-		this._element = element;
-		this._next = new Set(element.classList);
-		this._last = new Set(this._next);
-		return this;
-	}
-	add(...names) {
-		names = names.map(name => name.trim().split(/\s+/)).flat();
-		let changed = false;
-		for (const name of names) {
-			if (!this._next.has(name)) {
-				changed = true;
-				this._next.add(name);
-			}
-		}
-		changed && this.apply();
-		return this;
-	}
-	remove(...names) {
-		names = names.map(name => name.trim().split(/\s+/)).flat();
-		let changed = false;
-		for (const name of names) {
-			if (this._next.has(name)) {
-				changed = true;
-				this._next.delete(name);
-			}
-		}
-		changed && this.apply();
-		return this;
-	}
-	contains(name) {
-		return this._next.has(name);
-	}
-	toggle(name, v) {
-		if (v !== undefined) {
-			v = !!v;
-		} else {
-			v = !this.contains(name);
-		}
-		const names = name.trim().split(/\s+/);
-		v ? this.add(...names) : this.remove(...names);
-		return this;
-	}
-	apply() {
-		const last = [...this._last].sort().join(',');
-		const next = [...this._next].sort().join(',');
-		if (next === last) { return; }
-		const element = this._element;
-		const added = [], removed = [];
-		for (const name of this._next) {
-			if (!this._last.has(name)) { added.push(name); }
-		}
-		for (const name of this._last) {
-			if (!this._next.has(name)) { removed.push(name); }
-		}
-		if (removed.length) { element.classList.remove(...removed); }
-		if (added.length)   { element.classList.add(...added); }
-		this._last = this._next;
-		this._next = new Set(element.classList);
-		return this;
-	}
-}
 const ClassList = function(element) {
 	if (this.map.has(element)) {
 		return this.map.get(element);
 	}
-	const m = new ClassListWrapper(element);
+	const m = element.classList;
 	this.map.set(element, m);
 	return m;
 }.bind({map: new WeakMap()});
@@ -2130,15 +2054,16 @@ const Fullscreen = {
 	_handleEvents() {
 		this._handleEvnets = _.noop;
 		const cl = ClassList(document.body);
-		const handle = () => {
+		const handle = (ev) => {
+			ev.stopImmediatePropagation();
 			const isFull = this.now();
 			cl.toggle('is-fullscreen', isFull);
 			global.emitter.emit('fullscreenStatusChange', isFull);
 		};
-		document.addEventListener('webkitfullscreenchange', handle, false);
-		document.addEventListener('mozfullscreenchange', handle, false);
-		document.addEventListener('MSFullscreenChange', handle, false);
-		document.addEventListener('fullscreenchange', handle, false);
+		document.addEventListener('webkitfullscreenchange', handle, true);
+		document.addEventListener('mozfullscreenchange', handle, true);
+		document.addEventListener('MSFullscreenChange', handle, true);
+		document.addEventListener('fullscreenchange', handle, true);
 	}
 };
 util.fullscreen = Fullscreen;
@@ -2481,39 +2406,6 @@ isLoginLegacy: () => {
 		window.open(url, '_blank', 'width=550, height=480, left=100, top50, personalbar=0, toolbar=0, scrollbars=1, sizable=1', 0);
 	},
 	isGinzaWatchUrl: url => /^https?:\/\/www\.nicovideo\.jp\/watch\//.test(url || location.href),
-	getPlayerVer: () => {
-		if (document.getElementById('js-initial-watch-data')) {
-			return 'html5';
-		}
-		if (document.getElementById('watchAPIDataContainer')) {
-			return 'flash';
-		}
-		return 'unknown';
-	},
-	isZenzaPlayableVideo: () => {
-		try {
-			if (nicoUtil.getPlayerVer() === 'html5') {
-				return true;
-			}
-			const watchApiData = JSON.parse(document.querySelector('#watchAPIDataContainer').textContent);
-			const flvInfo = textUtil.parseQuery(
-				decodeURIComponent(watchApiData.flashvars.flvInfo)
-			);
-			const dmcInfo = JSON.parse(
-				decodeURIComponent(watchApiData.flashvars.dmcInfo || '{}')
-			);
-			const videoUrl = flvInfo.url ? flvInfo.url : '';
-			const isDmc = dmcInfo && dmcInfo.time;
-			if (isDmc) {
-				return true;
-			}
-			const isSwf = /\/smile\?s=/.test(videoUrl);
-			const isRtmp = (videoUrl.indexOf('rtmp') === 0);
-			return (isSwf || isRtmp) ? false : true;
-		} catch (e) {
-			return false;
-		}
-	},
 	getNicoHistory: window.decodeURIComponent(document.cookie.replace(/^.*(nicohistory[^;+]).*?/, '')),
 	getMypageVer: () => document.querySelector('#js-initial-userpage-data') ? 'spa' : 'legacy'
 };
@@ -23861,7 +23753,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 			screenMode: this._state.screenMode,
 			fullscreen: isFull ? 'yes' : 'no'
 		});
-		modes.forEach(m => this._$body.raf.toggleClass(m, m === screenMode && !isFull));
+		modes.forEach(m => this._$body.raf.toggleClass(m, m === screenMode && !isFull && this._state.isOpen));
 		this._updateScreenModeStyle();
 	}
 	_updateScreenModeStyle() {
@@ -26861,6 +26753,7 @@ CommentInputPanel.__css__ = (`
 		width: 100%;
 		height: 30px !important;
 		font-size: 24px;
+		background: transparent;
 		border: none;
 		opacity: 0;
 		transition: opacity 0.3s ease, box-shadow 0.4s ease;
@@ -26868,11 +26761,6 @@ CommentInputPanel.__css__ = (`
 		line-height: 26px !important;
 		padding-right: 32px !important;
 		margin-bottom: 0 !important;
-	}
-	.commentInputPanel:not(:focus-within) .commentInput {
-		background: transparent;
-		color: initial;
-		text-shadow: 1px 0 2px hsl(0,0%,66%), 0 1px 2px hsl(0,0%,66%), 0 -1px 2px hsl(0,0%,66%), -1px 0 2px hsl(0,0%,66%);
 	}
 	.commentInputPanel:hover  .commentInput {
 		opacity: 0.5;
@@ -26885,7 +26773,13 @@ CommentInputPanel.__css__ = (`
 		box-sizing: border-box;
 		border: 1px solid #888;
 		border-radius: 8px;
+		background: #fff;
 		box-shadow: 0 0 8px #fff;
+		color: #000;
+	}
+	.commentInputPanel:focus-within :where(.commandInput, .commentSubmit) {
+		background: #fff;
+		color: #000;
 	}
 	.commentInputPanel .autoPauseLabel {
 		position: absolute;
@@ -30567,7 +30461,7 @@ class HoverMenu {
 			};
 			uq('body').on('mouseover', e => {
 					const target = e.target;
-					if (target.tagName !== 'A' || !target.closest('.NicorepoItem_video')) {
+					if (target.tagName !== 'A' || !target.closest('.TimelineItem_video')) {
 						return;
 					}
 					target.removeEventListener('click', blockNavigation);
@@ -30588,7 +30482,7 @@ class HoverMenu {
 			if (watchId.startsWith('lv')) {
 				return;
 			}
-			if (target.closest('.NicorepoItem_video')) {
+			if (target.closest('.TimelineItem_video')) {
 				e.stopPropagation();
 			}
 			e.preventDefault();
@@ -30614,12 +30508,58 @@ class HoverMenu {
 		});
 	}
 }
-	const isOverrideGinza = () => {
+	const overrideGinza = async (dialog, query) => {
 		if (window.name === 'watchGinza') {
+			window.name = '';
+			return;
+		}
+		if (!Config.props.overrideGinza) {
+			return
+		}
+		initializeGinzaSlayer(dialog, query);
+		await uq.complete();
+		const stopPlayer = (ev) => {
+			if (!document.body.classList.contains('showNicoVideoPlayerDialog')) return;
+			if (/(^|[^\w])zenzaScreenMode_(small|sideView)([^\w]|$)/.test(document.body.className)) return;
+			ev.target.pause();
+		};
+		const video = document.querySelector('.grid-area_\\[player\\] video');
+		if (video !== null) {
+			video.addEventListener('play', stopPlayer);
+			video.pause();
+			return;
+		}
+		new MutationObserver((records, observer) => {
+			for (const record of records) {
+				if(record.addedNodes.length === 0) {
+					continue;
+				}
+				const video = record.target.querySelector('.grid-area_\\[player\\] video');
+				if (video === null) {
+					continue;
+				}
+				video.addEventListener('play', stopPlayer);
+				video.pause();
+				observer.disconnect();
+			}
+		}).observe(document.getElementById('root'), {
+			childList: true,
+			subtree: true,
+		});
+	};
+	const isWatchPage = () => {
+		const res = document.querySelector('meta[name="server-response"]')?.getAttribute('content');
+		if (res === null) {
+			return !!document.querySelector('.grid-area_\\[player\\]');
+		}
+		const json = JSON.parse(res);
+		if (json.meta.status > 299) {
 			return false;
 		}
-		if (Config.props.overrideGinza && nicoUtil.isZenzaPlayableVideo()) {
-			return true;
+		for (const ld of json.data.metadata.jsonLds) {
+			if (ld['@type'] === 'VideoObject') {
+				return true;
+			}
 		}
 		return false;
 	};
@@ -30810,9 +30750,7 @@ const replaceRedirectLinks = async () => {
 		replaceRedirectLinks();
 		const query = textUtil.parseQuery(START_PAGE_QUERY);
 		await uq.ready(); // DOMContentLoaded
-		const isWatch = util.isGinzaWatchUrl() &&
-			(!!document.getElementById('watchAPIDataContainer') ||
-				!!document.getElementById('js-initial-watch-data'));
+		const isWatch = util.isGinzaWatchUrl() && isWatchPage();
 		if (typeof Config.props.commentLanguage === 'string') {
 			Config.props.commentLanguage = Config.props.commentLanguage.replace('_', '-').toLowerCase();
 		}
@@ -30826,12 +30764,7 @@ const replaceRedirectLinks = async () => {
 		const dialog = initializeDialogPlayer(Config);
 		hoverMenu.setPlayer(dialog);
 		if (isWatch) {
-			if (isOverrideGinza()) {
-				initializeGinzaSlayer(dialog, query);
-			}
-			if (window.name === 'watchGinza') {
-				window.name = '';
-			}
+			await overrideGinza(dialog, query);
 		}
 		initializeMessage(dialog);
 		WatchPageHistory.initialize(dialog);

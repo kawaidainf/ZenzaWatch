@@ -586,7 +586,7 @@ class NicoVideoPlayerDialogView extends Emitter {
       screenMode: this._state.screenMode,
       fullscreen: isFull ? 'yes' : 'no'
     });
-    modes.forEach(m => this._$body.raf.toggleClass(m, m === screenMode && !isFull));
+    modes.forEach(m => this._$body.raf.toggleClass(m, m === screenMode && !isFull && this._state.isOpen));
     this._updateScreenModeStyle();
   }
   _updateScreenModeStyle() {
