@@ -308,6 +308,7 @@ class CommentListView extends Emitter {
     this._$menu
       .css('transform', `translate(0, ${item.dataset.top}px)`)
       .attr('data-item-id', item.dataset.itemId)
+      .attr('data-is-mine', item.dataset.isMine)
       .addClass('show');
   }
   _onMenuClick(e) {
@@ -806,11 +807,11 @@ CommentListView.__tpl__ = (`
   <div class="virtualScrollBarContainer"><div class="virtualScrollBar"></div></div><div class="timeBar"></div>
   <div id="listContainer">
     <div class="listMenu">
-      <span class="menuButton itemDetailRequest"
-        data-command="itemDetailRequest" title="詳細">？</span>
-      <span class="menuButton clipBoard"        data-command="clipBoard" title="クリップボードにコピー">copy</span>
-      <span class="menuButton addUserIdFilter"  data-command="addUserIdFilter" title="NGユーザー">NGuser</span>
-      <span class="menuButton addWordFilter"    data-command="addWordFilter" title="NGワード">NGword</span>
+      <span class="menuButton itemDetailRequest" data-command="itemDetailRequest" title="詳細">？</span>
+      <span class="menuButton removeComment"     data-command="removeComment" title="コメントを削除">delete</span>
+      <span class="menuButton clipBoard"         data-command="clipBoard" title="クリップボードにコピー">copy</span>
+      <span class="menuButton addUserIdFilter"   data-command="addUserIdFilter" title="NGユーザー">NGuser</span>
+      <span class="menuButton addWordFilter"     data-command="addWordFilter" title="NGワード">NGword</span>
     </div>
     <div id="listContainerInner"></div>
   </div>
@@ -841,27 +842,30 @@ const CommentListItemView = (() => {
 
       .listMenu {
         position: absolute;
-        display: block;
+        width: 100%;
+        right: 0;
+        z-index: 100;
+
+        display: flex;
+        flex-direction: row;
+        justify-content: flex-end;
+        gap: 8px;
+        padding-inline: 8px;
       }
 
-      .listMenu.show {
-        display: block;
-        width: 100%;
-        left: 0;
-        z-index: 100;
+      .listMenu:not(.show) {
+        display: none;
       }
 
       .listMenu  .menuButton {
-        display: inline-block;
-        position: absolute;
         font-size: 13px;
         line-height: 20px;
         border: 1px solid #666;
         color: #fff;
         background: #666;
         cursor: pointer;
-        top: 0;
         text-align: center;
+        width: 48px;
       }
 
       .listMenu .menuButton:hover {
@@ -875,24 +879,21 @@ const CommentListItemView = (() => {
       }
 
       .listMenu .itemDetailRequest {
-        right: 176px;
         width: auto;
         padding: 0 8px;
       }
 
-      .listMenu .clipBoard {
-        right: 120px;
-        width: 48px;
+      /* 自分の投稿をNGに突っ込む奴いるのかな？とは思いつつ残す。どっかで消すかなんかしたい
+      .listMenu[data-is-mine="true"] .addWordFilter {
+        display: none;
       }
 
-      .listMenu .addWordFilter {
-        right: 64px;
-        width: 48px;
-      }
+      .listMenu[data-is-mine="true"] .addUserIdFilter {
+        display: none;
+      }*/
 
-      .listMenu .addUserIdFilter {
-        right: 8px;
-        width: 48px;
+      .listMenu:not([data-is-mine="true"]) .removeComment {
+        display: none;
       }
 
       .commentListItem {
@@ -1149,6 +1150,7 @@ const CommentListItemView = (() => {
         vpos: item.vpos,
         top: this.top,
         thread: item.threadId,
+        isMine: item.isMine,
         title: `${item.no}: ${formattedDate} ID:${item.userId}\n${item.text}`,
         time3dp,
         valhalla: item.valhalla,
@@ -1269,6 +1271,7 @@ class CommentListItem {
   get valhalla() {return this.nicoChat.valhalla;}
   get nicotta() { return this.nicoChat.nicotta;}
   set nicotta(v) { this.nicoChat.nicotta = v; }
+  get isMine() {return this.nicoChat.isMine;}
 }
 CommentListItem._itemId = 0;
 
@@ -1600,6 +1603,10 @@ class CommentPanel extends Emitter {
       case 'clipBoard':
         Clipboard.copyText(item.text);
         this.emit('command', 'notify', 'クリップボードにコピーしました');
+        break;
+      case 'removeComment':
+        (new Promise((resolve, reject) => this.emit('deleteChat', {resolve, reject}, item.nicoChat)))
+          .then(() => this._model.removeItem(item));
         break;
       case 'addUserIdFilter':
         this._model.removeItem(item);

@@ -43,6 +43,19 @@ class NicoChatGroup extends Emitter {
       this.emit('addChat', nicoChat);
     }
   }
+  _getChat(nicoChat) {
+    return (chat) => chat.threadId === nicoChat.threadId && chat.fork === nicoChat.fork && chat.no === nicoChat.no
+  }
+  removeChat(nicoChat) {
+    const getChat = this._getChat(nicoChat);
+    this._members.splice(this._members.findIndex(getChat), 1);
+    nicoChat.group = this;
+
+    if (this._nicoChatFilter.isSafe(nicoChat)) {
+      this._filteredMembers.splice(this._filteredMembers.findIndex(getChat), 1);
+      this.onChange(null);
+    }
+  }
   get type() {return this._type;}
   get members() {
     if (this._filteredMembers.length > 0) {

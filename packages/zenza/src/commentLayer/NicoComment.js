@@ -276,6 +276,22 @@ class NicoComment extends Emitter {
     group.addChat(nicoChat, group);
     this.emit('addChat');
   }
+  removeChat(nicoChat) {
+    let group;
+    switch (nicoChat.type) {
+      case NicoChat.TYPE.TOP:
+        group = this.topGroup;
+        break;
+      case NicoChat.TYPE.BOTTOM:
+        group = this.bottomGroup;
+        break;
+      default:
+        group = this.nakaGroup;
+        break;
+    }
+
+    group.removeChat(nicoChat, group);
+  }
   /**
    * コメントの内容が変化した通知
    * NG設定、フィルタ反映時など

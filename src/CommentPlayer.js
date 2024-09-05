@@ -111,6 +111,9 @@ class NicoCommentPlayer extends Emitter {
 
     return nicoChat;
   }
+  removeChat(nicoChat) {
+    this._model.removeChat(nicoChat);
+  }
   set playbackRate(v) {
     if (this._view) {
       this._view.playbackRate = v;

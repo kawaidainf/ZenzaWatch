@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.6.3-fix-playlist.43
+// @version        2.6.3-fix-playlist.44
 // @run-at         document-body
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
 // @updateURL      https://github.com/kawaidainf/ZenzaWatch/raw/kawaidainf-patch-1/dist/ZenzaWatch-dev.user.js
@@ -101,7 +101,7 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.6.3-fix-playlist.43';
+    var VER = '2.6.3-fix-playlist.44';
     const ENV = 'DEV';
 
 
@@ -8707,6 +8707,27 @@ const {ThreadLoader} = (() => {
 				throw { result, message: `PostKeyの取得失敗 ${threadId}` }
 			}
 		}
+		async _delete(url, body, options = {}) {
+			try {
+				const { meta } = await netUtil.fetch(url, {
+					method: 'PUT',
+					headers: {
+						'X-Frontend-Id': FRONT_ID,
+						'X-Frontend-Version': FRONT_VER,
+						'Content-Type': 'text/plain; charset=UTF-8'
+					},
+					body
+				}).then(res => res.json());
+				if (meta.status >= 300) {
+					throw meta
+				}
+			} catch (result) {
+				throw {
+					result,
+					message: `コメントの通信失敗`
+				}
+			}
+		}
 		async _post(url, body, options = {}) {
 			try {
 				const { meta, data } = await netUtil.fetch(url, {
@@ -8847,8 +8868,8 @@ const {ThreadLoader} = (() => {
 					message: 'コメント投稿成功'
 				};
 			} catch (error) {
-				const { result: { status, errorCode } } = error;
-				if (status == null) {
+				const { result: { status: statusCode, errorCode } } = error;
+				if (statusCode == null) {
 					throw {
 						status: 'fail',
 						message: `コメント投稿失敗`
@@ -8859,12 +8880,67 @@ const {ThreadLoader} = (() => {
 				} else {
 					throw {
 						status: 'fail',
-						statusCode: status,
-						message: `コメント投稿失敗 ${errorCode}`
+						statusCode,
+						message: errorCode ? `コメント投稿失敗 ${errorCode}` : 'コメント投稿失敗'
 					};
 				}
 				await sleep(3000);
 				return await this.postChat(msgInfo, text, cmd, vpos, true)
+			}
+		}
+		async getDeleteKey(threadId, options = {}) {
+			const url = `https://nvapi.nicovideo.jp/v1/comment/keys/delete?threadId=${threadId}&fork=${options.fork || 'main'}`;
+			console.log('getNicoruKey url: ', url);
+			try {
+				const { meta, data } = await netUtil.fetch(url, {
+					headers: {
+						'X-Frontend-Id': FRONT_ID,
+						'X-Frontend-Version': FRONT_VER,
+						'X-Niconico-Language': options.language || 'ja-jp'
+					},
+					credentials: 'include'
+				}).then(res => res.json());
+				if (meta.status >= 300) {
+					throw meta
+				}
+				return data
+			} catch (result) {
+				throw { result, message: `DeleteKeyの取得失敗 ${threadId}` }
+			}
+		}
+		async deleteChat(msgInfo, chat) {
+			const {
+				videoId,
+				threadId,
+				language
+			} = msgInfo.threadInfo;
+			const url = new URL(`/v1/threads/${threadId}/comment-comment-owner-deletions`, msgInfo.nvComment.server);
+			const fork = FORK_LABEL[chat.fork || 0];
+			const { deleteKey } = await this.getDeleteKey(threadId, { language, fork });
+			const packet = JSON.stringify({
+				deleteKey,
+				fork,
+				language,
+				targets: [{
+					no: chat.no,
+					operation: 'DELETE'
+				}],
+				videoId,
+			});
+			console.log('put packet: ', packet);
+			try {
+				await this._delete(url, packet);
+				return {
+					status: 'ok',
+					message: 'コメント削除成功'
+				};
+			} catch (error) {
+				const { result: { status: statusCode, errorCode } } = error;
+				throw {
+					status: 'fail',
+					statusCode,
+					message: errorCode ? `コメント削除失敗 ${errorCode}` : 'コメント削除失敗'
+				};
 			}
 		}
 		async getNicoruKey(threadId, options = {}) {
@@ -8904,15 +8980,21 @@ const {ThreadLoader} = (() => {
 			});
 			console.log('post packet: ', packet);
 			try {
-				return await this._post(url, packet); // { nicoruId, nicoruCount }
+				const { nicoruId, nicoruCount } = await this._post(url, packet);
+				return {
+					status: 'ok',
+					id: nicoruId,
+					count: nicoruCount,
+					message: 'ニコれた'
+				};
 			} catch (error) {
-				const { result: { status = 'fail', errorCode } } = error;
+				const { result: { status: statusCode, errorCode } } = error;
 				throw {
-					status,
+					status: 'fail',
+					statusCode,
 					message: errorCode ? `ニコれなかった＞＜ ${errorCode}` : 'ニコれなかった＞＜'
 				};
 			}
-			return result;
 		}
 	}
 	return {ThreadLoader: new ThreadLoader};
@@ -9493,6 +9575,13 @@ class NicoVideoPlayer extends Emitter {
 		const nicoChat = this._commentPlayer.addChat(text, cmd, vpos, options);
 		console.log('addChat:', text, cmd, vpos, options, nicoChat);
 		return nicoChat;
+	}
+	removeChat(nicoChat) {
+		if (!this._commentPlayer) {
+			return;
+		}
+		this._commentPlayer.removeChat(nicoChat);
+		console.log('removeChat:', nicoChat);
 	}
 	get filter() {return this._commentPlayer.filter;}
 	get videoInfo() {return this._videoInfo;}
@@ -16605,6 +16694,9 @@ class NicoCommentPlayer extends Emitter {
 		this._model.addChat(nicoChat);
 		return nicoChat;
 	}
+	removeChat(nicoChat) {
+		this._model.removeChat(nicoChat);
+	}
 	set playbackRate(v) {
 		if (this._view) {
 			this._view.playbackRate = v;
@@ -16870,6 +16962,21 @@ class NicoComment extends Emitter {
 		}
 		group.addChat(nicoChat, group);
 		this.emit('addChat');
+	}
+	removeChat(nicoChat) {
+		let group;
+		switch (nicoChat.type) {
+			case NicoChat.TYPE.TOP:
+				group = this.topGroup;
+				break;
+			case NicoChat.TYPE.BOTTOM:
+				group = this.bottomGroup;
+				break;
+			default:
+				group = this.nakaGroup;
+				break;
+		}
+		group.removeChat(nicoChat, group);
 	}
 	_onChange(e) {
 		console.log('NicoComment.onChange: ', e);
@@ -17200,6 +17307,18 @@ class NicoChatGroup extends Emitter {
 		if (this._nicoChatFilter.isSafe(nicoChat)) {
 			this._filteredMembers.push(nicoChat);
 			this.emit('addChat', nicoChat);
+		}
+	}
+	_getChat(nicoChat) {
+		return (chat) => chat.threadId === nicoChat.threadId && chat.fork === nicoChat.fork && chat.no === nicoChat.no
+	}
+	removeChat(nicoChat) {
+		const getChat = this._getChat(nicoChat);
+		this._members.splice(this._members.findIndex(getChat), 1);
+		nicoChat.group = this;
+		if (this._nicoChatFilter.isSafe(nicoChat)) {
+			this._filteredMembers.splice(this._filteredMembers.findIndex(getChat), 1);
+			this.onChange(null);
 		}
 	}
 	get type() {return this._type;}
@@ -19367,6 +19486,7 @@ class CommentListView extends Emitter {
 		this._$menu
 			.css('transform', `translate(0, ${item.dataset.top}px)`)
 			.attr('data-item-id', item.dataset.itemId)
+			.attr('data-is-mine', item.dataset.isMine)
 			.addClass('show');
 	}
 	_onMenuClick(e) {
@@ -19832,11 +19952,11 @@ CommentListView.__tpl__ = (`
 	<div class="virtualScrollBarContainer"><div class="virtualScrollBar"></div></div><div class="timeBar"></div>
 	<div id="listContainer">
 		<div class="listMenu">
-			<span class="menuButton itemDetailRequest"
-				data-command="itemDetailRequest" title="詳細">？</span>
-			<span class="menuButton clipBoard"        data-command="clipBoard" title="クリップボードにコピー">copy</span>
-			<span class="menuButton addUserIdFilter"  data-command="addUserIdFilter" title="NGユーザー">NGuser</span>
-			<span class="menuButton addWordFilter"    data-command="addWordFilter" title="NGワード">NGword</span>
+			<span class="menuButton itemDetailRequest" data-command="itemDetailRequest" title="詳細">？</span>
+			<span class="menuButton removeComment"     data-command="removeComment" title="コメントを削除">delete</span>
+			<span class="menuButton clipBoard"         data-command="clipBoard" title="クリップボードにコピー">copy</span>
+			<span class="menuButton addUserIdFilter"   data-command="addUserIdFilter" title="NGユーザー">NGuser</span>
+			<span class="menuButton addWordFilter"     data-command="addWordFilter" title="NGワード">NGword</span>
 		</div>
 		<div id="listContainerInner"></div>
 	</div>
@@ -19858,25 +19978,27 @@ const CommentListItemView = (() => {
 			${CONSTANT.SCROLLBAR_CSS}
 			.listMenu {
 				position: absolute;
-				display: block;
-			}
-			.listMenu.show {
-				display: block;
 				width: 100%;
-				left: 0;
+				right: 0;
 				z-index: 100;
+				display: flex;
+				flex-direction: row;
+				justify-content: flex-end;
+				gap: 8px;
+				padding-inline: 8px;
+			}
+			.listMenu:not(.show) {
+				display: none;
 			}
 			.listMenu  .menuButton {
-				display: inline-block;
-				position: absolute;
 				font-size: 13px;
 				line-height: 20px;
 				border: 1px solid #666;
 				color: #fff;
 				background: #666;
 				cursor: pointer;
-				top: 0;
 				text-align: center;
+				width: 48px;
 			}
 			.listMenu .menuButton:hover {
 				border: 1px solid #ccc;
@@ -19887,21 +20009,18 @@ const CommentListItemView = (() => {
 				transform: translate(0, 1px);
 			}
 			.listMenu .itemDetailRequest {
-				right: 176px;
 				width: auto;
 				padding: 0 8px;
 			}
-			.listMenu .clipBoard {
-				right: 120px;
-				width: 48px;
+			/* 自分の投稿をNGに突っ込む奴いるのかな？とは思いつつ残す。どっかで消すかなんかしたい
+			.listMenu[data-is-mine="true"] .addWordFilter {
+				display: none;
 			}
-			.listMenu .addWordFilter {
-				right: 64px;
-				width: 48px;
-			}
-			.listMenu .addUserIdFilter {
-				right: 8px;
-				width: 48px;
+			.listMenu[data-is-mine="true"] .addUserIdFilter {
+				display: none;
+			}*/
+			.listMenu:not([data-is-mine="true"]) .removeComment {
+				display: none;
 			}
 			.commentListItem {
 				position: absolute;
@@ -20132,6 +20251,7 @@ const CommentListItemView = (() => {
 				vpos: item.vpos,
 				top: this.top,
 				thread: item.threadId,
+				isMine: item.isMine,
 				title: `${item.no}: ${formattedDate} ID:${item.userId}\n${item.text}`,
 				time3dp,
 				valhalla: item.valhalla,
@@ -20238,6 +20358,7 @@ class CommentListItem {
 	get valhalla() {return this.nicoChat.valhalla;}
 	get nicotta() { return this.nicoChat.nicotta;}
 	set nicotta(v) { this.nicoChat.nicotta = v; }
+	get isMine() {return this.nicoChat.isMine;}
 }
 CommentListItem._itemId = 0;
 class CommentPanelView extends Emitter {
@@ -20530,6 +20651,10 @@ class CommentPanel extends Emitter {
 			case 'clipBoard':
 				Clipboard.copyText(item.text);
 				this.emit('command', 'notify', 'クリップボードにコピーしました');
+				break;
+			case 'removeComment':
+				(new Promise((resolve, reject) => this.emit('deleteChat', {resolve, reject}, item.nicoChat)))
+					.then(() => this._model.removeItem(item));
 				break;
 			case 'addUserIdFilter':
 				this._model.removeItem(item);
@@ -23744,16 +23869,16 @@ class NicoVideoPlayerDialogView extends Emitter {
 		];
 	}
 	_applyScreenMode(force = false) {
-		const screenMode = `zenzaScreenMode_${this._state.screenMode}`;
+		const screenMode = this._state.isOpen ? `zenzaScreenMode_${this._state.screenMode}` : '';
 		if (!force && this._lastScreenMode === screenMode) { return; }
-		this._lastScreenMode = screenMode;
+		this._lastScreenMode = '';
 		const modes = this._getScreenModeClassNameTable();
 		const isFull = util.fullscreen.now();
 		Object.assign(document.body.dataset, {
 			screenMode: this._state.screenMode,
 			fullscreen: isFull ? 'yes' : 'no'
 		});
-		modes.forEach(m => this._$body.raf.toggleClass(m, m === screenMode && !isFull && this._state.isOpen));
+		modes.forEach(m => this._$body.raf.toggleClass(m, m === screenMode && !isFull));
 		this._updateScreenModeStyle();
 	}
 	_updateScreenModeStyle() {
@@ -25547,6 +25672,10 @@ class NicoVideoPlayerDialog extends Emitter {
 			language: this._playerConfig.props.commentLanguage
 		});
 		this._commentPanel.on('command', this._onCommand.bind(this));
+		this._commentPanel.on('deleteChat', (e, chat) => {
+			this.removeChat(chat)
+				.then(() => e.resolve());
+		});
 		this._commentPanel.on('update', _.debounce(this._onCommentPanelStatusUpdate.bind(this), 100));
 		this.emitResolve('commentpanel-ready');
 	}
@@ -25657,6 +25786,30 @@ class NicoVideoPlayerDialog extends Emitter {
 		const msgInfo = this._videoInfo.msgInfo;
 		return this.threadLoader.postChat(msgInfo, text, cmd, vpos, lang)
 			.then(onSuccess).catch(onFail);
+	}
+	removeChat(chat) {
+		if (!this._nicoVideoPlayer ||
+			!this.threadLoader ||
+			!this._state.isCommentReady) {
+			return;
+		}
+		if (!util.isLogin()) {
+			return;
+		}
+		window.console.time('コメント削除');
+		const msgInfo = this._videoInfo.msgInfo;
+		return this.threadLoader.deleteChat(msgInfo, chat)
+			.then(result => {
+				window.console.timeEnd('コメント削除');
+				this.execCommand('notify', 'コメント削除成功');
+				this._nicoVideoPlayer.removeChat(chat);
+			})
+			.catch(err => {
+				err = err || {};
+				window.console.log('_onFail: ', err);
+				window.console.timeEnd('コメント削除');
+				this.execCommand('alert', err.message);
+			});
 	}
 	get duration() {
 		if (!this._videoInfo) {

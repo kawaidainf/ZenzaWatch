@@ -577,16 +577,16 @@ class NicoVideoPlayerDialogView extends Emitter {
     ];
   }
   _applyScreenMode(force = false) {
-    const screenMode = `zenzaScreenMode_${this._state.screenMode}`;
+    const screenMode = this._state.isOpen ? `zenzaScreenMode_${this._state.screenMode}` : '';
     if (!force && this._lastScreenMode === screenMode) { return; }
-    this._lastScreenMode = screenMode;
+    this._lastScreenMode = '';
     const modes = this._getScreenModeClassNameTable();
     const isFull = util.fullscreen.now();
     Object.assign(document.body.dataset, {
       screenMode: this._state.screenMode,
       fullscreen: isFull ? 'yes' : 'no'
     });
-    modes.forEach(m => this._$body.raf.toggleClass(m, m === screenMode && !isFull && this._state.isOpen));
+    modes.forEach(m => this._$body.raf.toggleClass(m, m === screenMode && !isFull));
     this._updateScreenModeStyle();
   }
   _updateScreenModeStyle() {
@@ -2539,6 +2539,10 @@ class NicoVideoPlayerDialog extends Emitter {
       language: this._playerConfig.props.commentLanguage
     });
     this._commentPanel.on('command', this._onCommand.bind(this));
+    this._commentPanel.on('deleteChat', (e, chat) => {
+      this.removeChat(chat)
+        .then(() => e.resolve());
+    });
     this._commentPanel.on('update', _.debounce(this._onCommentPanelStatusUpdate.bind(this), 100));
     this.emitResolve('commentpanel-ready');
   }
@@ -2659,6 +2663,32 @@ class NicoVideoPlayerDialog extends Emitter {
     const msgInfo = this._videoInfo.msgInfo;
     return this.threadLoader.postChat(msgInfo, text, cmd, vpos, lang)
       .then(onSuccess).catch(onFail);
+  }
+  removeChat(chat) {
+    if (!this._nicoVideoPlayer ||
+      !this.threadLoader ||
+      !this._state.isCommentReady) {
+      return;
+    }
+    if (!util.isLogin()) {
+      return;
+    }
+
+    window.console.time('コメント削除');
+
+    const msgInfo = this._videoInfo.msgInfo;
+    return this.threadLoader.deleteChat(msgInfo, chat)
+      .then(result => {
+        window.console.timeEnd('コメント削除');
+        this.execCommand('notify', 'コメント削除成功');
+        this._nicoVideoPlayer.removeChat(chat);
+      })
+      .catch(err => {
+        err = err || {};
+        window.console.log('_onFail: ', err);
+        window.console.timeEnd('コメント削除');
+        this.execCommand('alert', err.message);
+      });
   }
   get duration() {
     if (!this._videoInfo) {

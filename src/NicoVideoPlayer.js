@@ -344,6 +344,13 @@ class NicoVideoPlayer extends Emitter {
     console.log('addChat:', text, cmd, vpos, options, nicoChat);
     return nicoChat;
   }
+  removeChat(nicoChat) {
+    if (!this._commentPlayer) {
+      return;
+    }
+    this._commentPlayer.removeChat(nicoChat);
+    console.log('removeChat:', nicoChat);
+  }
   /**
    * @returns {NicoChatFilter}
    */

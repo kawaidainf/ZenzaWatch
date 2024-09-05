@@ -65,6 +65,28 @@ const {ThreadLoader} = (() => {
       }
     }
 
+    async _delete(url, body, options = {}) {
+      try {
+        const { meta } = await netUtil.fetch(url, {
+          method: 'PUT',
+          headers: {
+            'X-Frontend-Id': FRONT_ID,
+            'X-Frontend-Version': FRONT_VER,
+            'Content-Type': 'text/plain; charset=UTF-8'
+          },
+          body
+        }).then(res => res.json());
+        if (meta.status >= 300) {
+          throw meta
+        }
+      } catch (result) {
+        throw {
+          result,
+          message: `コメントの通信失敗`
+        }
+      }
+    }
+
     async _post(url, body, options = {}) {
       try {
         const { meta, data } = await netUtil.fetch(url, {
@@ -224,8 +246,8 @@ const {ThreadLoader} = (() => {
           message: 'コメント投稿成功'
         };
       } catch (error) {
-        const { result: { status, errorCode } } = error;
-        if (status == null) {
+        const { result: { status: statusCode, errorCode } } = error;
+        if (statusCode == null) {
           throw {
             status: 'fail',
             message: `コメント投稿失敗`
@@ -236,12 +258,70 @@ const {ThreadLoader} = (() => {
         } else {
           throw {
             status: 'fail',
-            statusCode: status,
-            message: `コメント投稿失敗 ${errorCode}`
+            statusCode,
+            message: errorCode ? `コメント投稿失敗 ${errorCode}` : 'コメント投稿失敗'
           };
         }
         await sleep(3000);
         return await this.postChat(msgInfo, text, cmd, vpos, true)
+      }
+    }
+
+    async getDeleteKey(threadId, options = {}) {
+      const url = `https://nvapi.nicovideo.jp/v1/comment/keys/delete?threadId=${threadId}&fork=${options.fork || 'main'}`;
+
+      console.log('getNicoruKey url: ', url);
+      try {
+        const { meta, data } = await netUtil.fetch(url, {
+          headers: {
+            'X-Frontend-Id': FRONT_ID,
+            'X-Frontend-Version': FRONT_VER,
+            'X-Niconico-Language': options.language || 'ja-jp'
+          },
+          credentials: 'include'
+        }).then(res => res.json());
+        if (meta.status >= 300) {
+          throw meta
+        }
+        return data
+      } catch (result) {
+        throw { result, message: `DeleteKeyの取得失敗 ${threadId}` }
+      }
+    }
+
+    async deleteChat(msgInfo, chat) {
+      const {
+        videoId,
+        threadId,
+        language
+      } = msgInfo.threadInfo;
+      const url = new URL(`/v1/threads/${threadId}/comment-comment-owner-deletions`, msgInfo.nvComment.server);
+      const fork = FORK_LABEL[chat.fork || 0];
+      const { deleteKey } = await this.getDeleteKey(threadId, { language, fork });
+      const packet = JSON.stringify({
+        deleteKey,
+        fork,
+        language,
+        targets: [{
+          no: chat.no,
+          operation: 'DELETE'
+        }],
+        videoId,
+      });
+      console.log('put packet: ', packet);
+      try {
+        await this._delete(url, packet);
+        return {
+          status: 'ok',
+          message: 'コメント削除成功'
+        };
+      } catch (error) {
+        const { result: { status: statusCode, errorCode } } = error;
+        throw {
+          status: 'fail',
+          statusCode,
+          message: errorCode ? `コメント削除失敗 ${errorCode}` : 'コメント削除失敗'
+        };
       }
     }
 
@@ -284,15 +364,21 @@ const {ThreadLoader} = (() => {
       });
       console.log('post packet: ', packet);
       try {
-        return await this._post(url, packet); // { nicoruId, nicoruCount }
+        const { nicoruId, nicoruCount } = await this._post(url, packet);
+        return {
+          status: 'ok',
+          id: nicoruId,
+          count: nicoruCount,
+          message: 'ニコれた'
+        };
       } catch (error) {
-        const { result: { status = 'fail', errorCode } } = error;
+        const { result: { status: statusCode, errorCode } } = error;
         throw {
-          status,
+          status: 'fail',
+          statusCode,
           message: errorCode ? `ニコれなかった＞＜ ${errorCode}` : 'ニコれなかった＞＜'
         };
       }
-      return result;
     }
   }
 
